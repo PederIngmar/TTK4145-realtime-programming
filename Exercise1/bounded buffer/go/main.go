@@ -1,38 +1,36 @@
-
 package main
 
-import "fmt"
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
+func producer(buffered_channel chan int) {
 
-func producer(/*TODO: parameters?*/){
+	for i := 0; i < 10; i++ {
+		time.Sleep(100 * time.Millisecond)
+		fmt.Printf("[producer]: pushing %d\n", i)
+		buffered_channel <- i
+	}
+	//close(buffered_channel)
+}
 
-    for i := 0; i < 10; i++ {
-        time.Sleep(100 * time.Millisecond)
-        fmt.Printf("[producer]: pushing %d\n", i)
-        // TODO: push real value to buffer
-    }
+func consumer(buffered_channel chan int) {
+
+	time.Sleep(1 * time.Second)
+	for {
+		i := <-buffered_channel
+		fmt.Printf("[consumer]: %d\n", i)
+		time.Sleep(50 * time.Millisecond)
+	}
 
 }
 
-func consumer(/*TODO: parameters?*/){
+func main() {
+	buffered_channel := make(chan int, 5)
 
-    time.Sleep(1 * time.Second)
-    for {
-        i := 0 //TODO: get real value from buffer
-        fmt.Printf("[consumer]: %d\n", i)
-        time.Sleep(50 * time.Millisecond)
-    }
-    
-}
+	go consumer(buffered_channel)
+	go producer(buffered_channel)
 
-
-func main(){
-    
-    // TODO: make a bounded buffer
-    
-    go consumer()
-    go producer()
-    
-    select {}
+	select {}
 }
