@@ -5,42 +5,40 @@
 #include <stdio.h>
 
 int i = 0;
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER; // Using a mutex to protect the shared variable, and not semaphore as it is a more general 
 
-// Note the return type: void*
-void* incrementingThreadFunction(){
-    // TODO: increment i 1_000_000 times
-    for (int j = 0; j < 1000000; j++) {
+// Incrementing function
+void *incrementingThreadFunction(void *arg) {
+    for (int j = 0; j < 1000000; ++j) {
+        pthread_mutex_lock(&mutex);
         i++;
+        pthread_mutex_unlock(&mutex);
     }
     return NULL;
 }
 
-void* decrementingThreadFunction(){
-    // TODO: decrement i 1_000_000 times
-    for (int j = 0; j < 1000000; j++) {
+// Decrementing function
+void *decrementingThreadFunction(void *arg) {
+    for (int j = 0; j < 1000001; ++j) {
+        pthread_mutex_lock(&mutex);
         i--;
+        pthread_mutex_unlock(&mutex);
     }
     return NULL;
 }
 
+int main() {
+    pthread_t incrementingThread, decrementingThread;
 
-int main(){
-    // TODO: 
-    // start the two functions as their own threads using `pthread_create`
-    // Hint: search the web! Maybe try "pthread_create example"?
-    
-    pthread_t incrementingThread; // pthread_t is a type that represents a thread
-    pthread_t decrementingThread; 
-    pthread_create(&incrementingThread, NULL, incrementingThreadFunction, NULL); // pthread_create creates a new thread
+    pthread_create(&incrementingThread, NULL, incrementingThreadFunction, NULL);
     pthread_create(&decrementingThread, NULL, decrementingThreadFunction, NULL);
 
-    // TODO:
-    // wait for the two threads to be done before printing the final result
-    // Hint: Use `pthread_join`  
-    pthread_join(incrementingThread, NULL); // pthread_join waits for the thread to finish. The thread and the return value is joined
+    pthread_join(incrementingThread, NULL);
     pthread_join(decrementingThread, NULL);
 
+    printf("Magic value i: %d\n", i);
 
-    printf("The magic number is: %d\n", i);
+    pthread_mutex_destroy(&mutex);
+
     return 0;
 }

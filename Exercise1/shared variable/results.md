@@ -1,4 +1,6 @@
-### Results
+## Results
+
+### Task 3
 Each run of the programmes "foo.c" and "foo.go" prints a different result between -1000000 and 1000000, even after compilation.
 Both threads execute independently, but they operate on the same memory location. The 2 functions consists of some atomic operations like:
 - reading the value from memory
