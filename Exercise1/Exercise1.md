@@ -157,10 +157,24 @@ This part of the exercise is not for handing in, just for thinking about. Talk t
 
 The main problem of the project is to ensure that no orders are lost. 
  - What sub-problems do you think this consists of?
+   - deciding who handles the order
+     - who is closest and is not handleing any orders?
+     - should an elevator that is already handleing an order pick up extras?
+       - only if all other elevators are also handeling orders
+       - there is an up and down ordering button at each floor -> elevators handeling an order going paste the floor in the right diriection might pik up an extra order
+   - designing synchronization that handels if the computer handeling an order fails during any of the stages
+     - stages:
+       - before picking up
+       - while shipping
+       - 
+   - might need to calculate time estimates for orders so that they are checked upon if no confirmation messages are received 
  - What will you have to make in order to solve these problems?
 
 Maybe try thinking about the happy case of the system:
  - If we push the button one place, how do we make (preferably only) one elevator start moving?
+   - the whole system needs to agree who picks the order up
+     - so either the primary decides
+     - or 
  - Once an elevator arrives, how do we inform the others that it is safe to clear that order?
 
 Maybe try thinking about the worst-case (http://xkcd.com/748/) behavior of the system:
