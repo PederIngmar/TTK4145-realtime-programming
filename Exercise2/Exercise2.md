@@ -164,4 +164,3 @@ The case of the 500-mile email (http://www.ibiblio.org/harris/500milemail.html)
 21 Nested Callbacks (http://blog.michellebu.com/2013/03/21-nested-callbacks/)
 "I gathered from these exchanges that programmers have a perpetual competition to see who can claim the most things as 'simple.'"
  
-
