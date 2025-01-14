@@ -59,7 +59,7 @@ The server will respond to any message you send to it. Try sending a message to 
 
 There are three common ways to format a message: (Though there are probably others)
  - 1: Always send fixed-sized messages
- - 2: Send the message size with each message (as part of a fixed-size header)
+ <!-- - 2: Send the message size with each message (as part of a fixed-size header) -->
  - 3: Use some kind of marker to signify the end of a message
 
 The TCP server can send you two of these:
