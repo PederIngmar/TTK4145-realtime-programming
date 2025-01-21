@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"sync"
 	"time"
@@ -112,10 +113,10 @@ func send_tcp_server(wg *sync.WaitGroup) error {
 	return nil
 }
 
-func receive_tcp_server() error {
-	port := "34933" // 33546
+func receiveTCPServer() error {
+	port := "34933"
 	addr := fmt.Sprintf(":%s", port)
-	fmt.Println("tcp port address", addr)
+	log.Printf("Starting TCP server on %s", addr)
 
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -123,56 +124,81 @@ func receive_tcp_server() error {
 	}
 	defer listener.Close()
 
-	conn, err := listener.Accept()
-	if err != nil {
-		return fmt.Errorf("failed to accept connection: %w", err)
-	}
+	for {
+		// Accept a connection
+		conn, err := listener.Accept()
+		if err != nil {
+			log.Printf("failed to accept connection: %v", err)
+			continue // Log the error and continue to accept new connections
+		}
 
+		// Configure TCP settings if applicable
+		if tcpConn, ok := conn.(*net.TCPConn); ok {
+			tcpConn.SetNoDelay(false)
+		}
+
+		// Handle the connection in a separate goroutine
+		go handleClientTCP(conn)
+	}
+}
+
+func handleClientTCP(conn net.Conn) {
 	defer conn.Close()
 
-	if tcpConn, ok := conn.(*net.TCPConn); ok {
-		tcpConn.SetNoDelay(false)
-	}
-
+	// Read and process data from the client
 	buffer := make([]byte, 1024)
-	fmt.Println("Listening for messages... + \x00")
-	_, err = conn.Read(buffer)
-	if err != nil {
-		return fmt.Errorf("failed to read from TCP: %w", err)
-	}
+	for {
+		n, err := conn.Read(buffer)
+		if err != nil {
+			log.Printf("Error reading from client: %v", err)
+			return
+		}
 
-	// TCP_NODELAY
-	return nil
+		log.Printf("Received: %s", string(buffer[:n]))
+
+		// Write data back to the client
+		_, err = conn.Write([]byte("Acknowledged\n"))
+		if err != nil {
+			log.Printf("Error writing to client: %v", err)
+			return
+		}
+	}
 }
 
 func main() {
-	var wg sync.WaitGroup
-	wg.Add(1)
-
-	//_, err := findServerIP()
-	//if err != nil {
-	//	fmt.Fprintf(os.Stderr, "Error finding server IP: %v\n", err)
-	//	os.Exit(1)
-	//}
-	//send_tcp_server()
-	receive_tcp_server()
-
-	// serverIP := "10.100.23.204"
-	//workspaceNumber := 3 // Replace with your workspace number
-
-	// for j := 0; j < 3; j++ {
-	// 	err = send_udp_server(serverIP, workspaceNumber)
-	// 	if err != nil {
-	// 		fmt.Fprintf(os.Stderr, "Error communicating with server: %v\n", err)
-	// 		os.Exit(1)
-	// 	}
-	// }
-
-	// for j := 0; j < 3; j++ {
-	// 	err = receive_udp_server(workspaceNumber)
-	// 	if err != nil {
-	// 		fmt.Fprintf(os.Stderr, "Error communicating with server: %v\n", err)
-	// 		os.Exit(1)
-	// 	}
-	// }
+	if err := receiveTCPServer(); err != nil {
+		log.Fatalf("Server error: %v", err)
+	}
 }
+
+// func main() {
+//var wg sync.WaitGroup
+//wg.Add(1)
+
+//_, err := findServerIP()
+//if err != nil {
+//	fmt.Fprintf(os.Stderr, "Error finding server IP: %v\n", err)
+//	os.Exit(1)
+//}
+//send_tcp_server()
+//receive_tcp_server()
+
+// serverIP := "10.100.23.204"
+//workspaceNumber := 3 // Replace with your workspace number
+
+// for j := 0; j < 3; j++ {
+// 	err = send_udp_server(serverIP, workspaceNumber)
+// 	if err != nil {
+// 		fmt.Fprintf(os.Stderr, "Error communicating with server: %v\n", err)
+// 		os.Exit(1)
+// 	}
+// }
+
+// for j := 0; j < 3; j++ {
+// 	err = receive_udp_server(workspaceNumber)
+// 	if err != nil {
+// 		fmt.Fprintf(os.Stderr, "Error communicating with server: %v\n", err)
+// 		os.Exit(1)
+// 	}
+// }
+//}
