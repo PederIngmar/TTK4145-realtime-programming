@@ -2,131 +2,91 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"strconv"
-	"sync"
 	"time"
 )
 
 const (
-	statusFile  = "process_status.txt"
-	aliveSignal = "alive"
-)
-
-var (
-	mutex       sync.Mutex
-	counterFile = "counter.txt"
+	port           = ":8080"       // UDP-port for kommunikasjon mellom prosesser
+	heartbeatFreq  = time.Second   // Frekvens for "I am alive"-meldinger
+	heartbeatLimit = 3             // Hvor mange "I am alive"-meldinger som kan mistes før backup tar over
 )
 
 func main() {
 	args := os.Args
-
-	if len(args) == 2 && args[1] == "backup" {
-		runBackup()
-	} else {
-		runPrimary()
+	var counter int
+	if len(args) > 1 {
+		counter, _ = strconv.Atoi(args[1]) // Start counter fra eksisterende verdi
 	}
-}
 
-func runPrimary() {
-	fmt.Println("Primary process started")
-	initializeCounter()
-	go broadcastAliveSignal()
+	if len(args) == 1 {
+		// Lag backup-prosess
+		createBackupProcess(counter)
+	}
+
+	go listenForHeartbeat() // Backup lytter etter heartbeat-meldinger
 
 	for {
-		mutex.Lock()
-		counter := readCounter()
 		counter++
-		writeCounter(counter)
-		mutex.Unlock()
+		fmt.Println("Counting:", counter)
 
-		fmt.Printf("Primary counting: %d\n", counter)
-		time.Sleep(1 * time.Second)
+		sendHeartbeat() // Hovedprosess sender heartbeat
+		time.Sleep(time.Second)
 
-		if counter%10 == 0 {
-			// Simulate a crash
-			fmt.Println("Primary process simulating a crash...")
-			os.Exit(1)
+		if len(args) == 1 { // Hovedprosess lager backup
+			createBackupProcess(counter)
 		}
 	}
 }
 
-func runBackup() {
-	fmt.Println("Backup process started")
-
-	for {
-		time.Sleep(2 * time.Second)
-
-		if !isPrimaryAlive() {
-			fmt.Println("Backup taking over as primary...")
-			spawnBackup()
-			runPrimary()
-		}
-	}
-}
-
-func broadcastAliveSignal() {
-	for {
-		time.Sleep(1 * time.Second)
-		mutex.Lock()
-		writeStatusFile(aliveSignal)
-		mutex.Unlock()
-	}
-}
-
-func isPrimaryAlive() bool {
-	mutex.Lock()
-	defer mutex.Unlock()
-
-	data, err := os.ReadFile(statusFile)
-	if err != nil || string(data) != aliveSignal {
-		return false
-	}
-	return true
-}
-
-func spawnBackup() {
-	fmt.Println("Spawning new backup...")
-	cmd := exec.Command(os.Args[0], "backup")
+// Lager en ny prosess (backup)
+func createBackupProcess(counter int) {
+	cmd := exec.Command("gnome-terminal", "--", "go", "run", "main.go", strconv.Itoa(counter))
 	err := cmd.Start()
 	if err != nil {
-		fmt.Println("Failed to spawn backup:", err)
+		fmt.Println("Failed to create backup process:", err)
 		os.Exit(1)
 	}
 }
 
-func initializeCounter() {
-	_, err := os.Stat(counterFile)
-	if os.IsNotExist(err) {
-		writeCounter(0)
+// Sender en UDP-melding som indikerer at prosessen er i live
+func sendHeartbeat() {
+	conn, err := net.Dial("udp", "localhost"+port)
+	if err != nil {
+		fmt.Println("Error sending heartbeat:", err)
+		return
 	}
+	defer conn.Close()
+	conn.Write([]byte("I am alive"))
 }
 
-func readCounter() int {
-	data, err := os.ReadFile(counterFile)
+// Lytter etter heartbeat-meldinger fra hovedprosessen
+func listenForHeartbeat() {
+	addr, _ := net.ResolveUDPAddr("udp", port)
+	conn, err := net.ListenUDP("udp", addr)
 	if err != nil {
-		fmt.Println("Error reading counter:", err)
-		return 0
+		fmt.Println("Error listening for heartbeat:", err)
+		return
 	}
-	counter, err := strconv.Atoi(string(data))
-	if err != nil {
-		fmt.Println("Error converting counter to int:", err)
-		return 0
-	}
-	return counter
-}
+	defer conn.Close()
 
-func writeCounter(counter int) {
-	err := os.WriteFile(counterFile, []byte(strconv.Itoa(counter)), 0644)
-	if err != nil {
-		fmt.Println("Error writing counter:", err)
-	}
-}
+	buf := make([]byte, 1024)
+	missedBeats := 0
 
-func writeStatusFile(status string) {
-	err := os.WriteFile(statusFile, []byte(status), 0644)
-	if err != nil {
-		fmt.Println("Error writing status file:", err)
+	for {
+		conn.SetReadDeadline(time.Now().Add(heartbeatFreq * heartbeatLimit))
+		_, _, err := conn.ReadFromUDP(buf)
+		if err != nil {
+			missedBeats++
+			if missedBeats >= heartbeatLimit {
+				fmt.Println("Primary process has died. Taking over...")
+				main() // Backup tar over som hovedprosessen
+			}
+		} else {
+			missedBeats = 0 // Reset på hver mottatt melding
+		}
 	}
 }
