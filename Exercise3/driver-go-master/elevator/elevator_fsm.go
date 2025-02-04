@@ -7,7 +7,7 @@ import (
 // events Button press, Arrive at floor, Timer timed out
 
 // 3 functions chooseDirection, shoushouldStopld_stop, clearRequestsAtFloor
-
+/// mama a girl
 
 func requests_above(e Elevator) bool{
     for f := e.Floor+1; f < N_FLOORS; f++ {
