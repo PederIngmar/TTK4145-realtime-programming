@@ -1,11 +1,11 @@
 package main
 
 import (
-	. "Driver-go/elevator"
+	"Driver-go/elevator"
 )
 
 func main() {
-	e := Elevator{}
+	e := elevator.Elevator{}
 
-	RunElevatorFsm(e)
+	elevator.RunElevatorFsm(e)
 }

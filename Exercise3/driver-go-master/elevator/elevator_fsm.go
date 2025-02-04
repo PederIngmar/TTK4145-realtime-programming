@@ -189,6 +189,7 @@ func RunElevatorFsm(elev Elevator) {
 
 	elevio.Init("localhost:15657", config.NUM_FLOORS)
 	e := ElevatorInit(elev, drv_floors)
+	elevio.SetStopLamp(false)
 	go setAllLights(elev)
 
 	for {
@@ -209,11 +210,9 @@ func RunElevatorFsm(elev Elevator) {
 				case DoorOpen:
 					fmt.Println("DoorOpen 3")
 					elevio.SetDoorOpenLamp(true)
-					doorTimer := time.NewTimer(config.DOOR_OPEN_TIME)
 					doorTimer.Reset(config.DOOR_OPEN_TIME)
 					clearRequestsAtFloor(e)
-					e.State = Idle
-					elevio.SetDoorOpenLamp(false)
+					e.State = DoorOpen
 					fmt.Printf("Door timer: %+v", doorTimer)
 
 				case Moving:
@@ -261,6 +260,7 @@ func RunElevatorFsm(elev Elevator) {
 					elevio.SetDoorOpenLamp(true)
 					e := clearRequestsAtFloor(e)
 					//time.NewTimer(config.DOOR_OPEN_TIME)
+					doorTimer.Reset(config.DOOR_OPEN_TIME)
 					setAllLights(e)
 					e.State = DoorOpen //////// Stays open
 					fmt.Printf("Case 3: Should stop")
@@ -303,10 +303,11 @@ func RunElevatorFsm(elev Elevator) {
 			}
 			if e.Dir == Stop {
 				e.State = Idle
-				elevio.SetMotorDirection(elevio.MD_Stop)
+				//elevio.SetMotorDirection(elevio.MD_Stop)
 			} else {
 				elevio.SetMotorDirection(elevio.MotorDirection(e.Dir))
 				e.State = Moving
+				elevio.SetDoorOpenLamp(false)
 			}
 		}
 	}
