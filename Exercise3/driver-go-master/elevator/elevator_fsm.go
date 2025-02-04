@@ -3,6 +3,8 @@ package elevator
 import (
 	"Driver-go/config"
 	"Driver-go/elevator/elevio"
+	"fmt"
+	"time"
 )
 
 // 3 states: Idle, Moving, Door open
@@ -76,7 +78,6 @@ func chooseDirection(e Elevator) (ElevatorDir, ElevatorState) {
 	default:
 		return Stop, Idle
 	}
-
 }
 
 func shouldStop(e Elevator) bool {
@@ -125,6 +126,27 @@ func clearRequestsAtFloor(e Elevator) {
 	}
 }
 
+func setAllLights(e Elevator) {
+	for floor := 0; floor < N_FLOORS; floor++ {
+		for btn := 0; btn < N_BUTTONS; btn++ {
+			elevio.SetButtonLamp(elevio.ButtonType(btn), floor, e.Queue[floor][btn])
+		}
+	}
+}
+
+func shouldClearImmediately(e Elevator, floor int, button ButtonType) bool {
+	switch config.CLEAR_REQUEST_VARIANT {
+	case config.All:
+		return e.Floor == floor
+	case config.InDirn:
+		return e.Floor == floor && ((e.Dir == Up && button == elevio.BT_HallUp) ||
+			(e.Dir == Down && button == elevio.BT_HallDown) ||
+			e.Dir == Stop ||
+			button == elevio.BT_Cab)
+	default:
+		return false
+	}
+}
 
 func runElevatorFsm(e Elevator) {
 	drv_buttons := make(chan elevio.ButtonEvent)
@@ -137,38 +159,83 @@ func runElevatorFsm(e Elevator) {
 	go elevio.PollObstructionSwitch(drv_obstr)
 	go elevio.PollStopButton(drv_stop)
 
-	elevio.Init("localhost:15657", 4)
+	elevio.Init("localhost:15657", config.NUM_FLOORS)
 
 	for {
 		select {
-			case a := <-drv_buttons: // button press
-				// add to queue
-				// 
-			case a := <-drv_floors: // arrive at floor
+		case a := <-drv_buttons: // button press
+			// add to queue
+			fmt.Printf("button request at: %+v", a)
+			switch e.State {
+			case Idle:
+				e.Queue[a.Floor][a.Button] = true
+				e.Dir, e.State = chooseDirection(e)
+
+				switch e.State {
+				case DoorOpen:
+					elevio.SetDoorOpenLamp(true)
+					doorTimer := time.NewTimer(config.DOOR_OPEN_TIME)
+					fmt.Printf("Door timer: %+v", doorTimer)
+					clearRequestsAtFloor(e)
+				case Moving:
+					elevio.SetMotorDirection(elevio.MotorDirection(e.Dir))
+				case Idle:
+					break
+				}
+
+			case DoorOpen:
+				if shouldClearImmediately(e, a.Floor, a.Button) {
+					time.NewTimer(config.DOOR_OPEN_TIME)
+				} else {
+					e.Queue[a.Floor][a.Button] = true
+				}
+			case Moving:
+				e.Queue[a.Floor][a.Button] = true
+			}
+
+			setAllLights(e)
+			fmt.Printf("\nNew state:\n")
+
+		case a := <-drv_floors: // arrive at floor
 			// should stop?
-			// if yes: stop, clear requests at floor 
+			// if yes: stop, clear requests at floor
 			//-> open door, start timer
 			// if no: continue moving
-			
-			
+			fmt.Printf("arrived at floor: %+v", a)
+			e.Floor = a
 
-			// in open door state: if timer timed out and no requests -> idle else -> moving
-				
-			case a := <-drv_obstr: // obstruction
-				fmt.Printf("%+v\n", a)
-				if a {
+			switch e.State {
+			case Moving:
+				if shouldStop(e) {
 					elevio.SetMotorDirection(elevio.MD_Stop)
-				} else {
-					elevio.SetMotorDirection(d)
+					elevio.SetDoorOpenLamp(true)
+					clearRequestsAtFloor(e)
+					time.NewTimer(config.DOOR_OPEN_TIME)
+					setAllLights(e)
+					e.State = DoorOpen
 				}
+				break
+			default:
+				break
+			}
 
-			case a := <-drv_stop: // 
-				fmt.Printf("%+v\n", a)
-				for f := 0; f < numFloors; f++ {
-					for b := elevio.ButtonType(0); b < 3; b++ {
-						elevio.SetButtonLamp(b, f, false)
-					}
+		// in open door state: if timer timed out and no requests -> idle else -> moving
+
+		case a := <-drv_obstr: // obstruction
+			fmt.Printf("%+v\n", a)
+			if a {
+				elevio.SetMotorDirection(elevio.MD_Stop)
+			} else {
+				elevio.SetMotorDirection(d)
+			}
+
+		case a := <-drv_stop: //
+			fmt.Printf("%+v\n", a)
+			for f := 0; f < config.NUM_FLOORS; f++ {
+				for b := elevio.ButtonType(0); b < config.NUM_BUTTONS; b++ {
+					elevio.SetButtonLamp(b, f, false)
 				}
 			}
+		}
 	}
 }
