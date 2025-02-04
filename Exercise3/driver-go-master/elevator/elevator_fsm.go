@@ -134,7 +134,7 @@ func setAllLights(e Elevator) {
 	}
 }
 
-func shouldClearImmediately(e Elevator, floor int, button ButtonType) bool {
+func shouldClearImmediately(e Elevator, floor int, button elevio.ButtonType) bool {
 	switch config.CLEAR_REQUEST_VARIANT {
 	case config.All:
 		return e.Floor == floor
@@ -148,7 +148,16 @@ func shouldClearImmediately(e Elevator, floor int, button ButtonType) bool {
 	}
 }
 
-func runElevatorFsm(e Elevator) {
+func ElevatorInit() Elevator {
+	return Elevator{
+		Floor: 0,
+		State: Idle,
+		Dir:   Stop,
+		Queue: [N_FLOORS][N_BUTTONS]bool{},
+	}
+}
+
+func RunElevatorFsm(e Elevator) {
 	drv_buttons := make(chan elevio.ButtonEvent)
 	drv_floors := make(chan int)
 	drv_obstr := make(chan bool)
@@ -168,29 +177,38 @@ func runElevatorFsm(e Elevator) {
 			fmt.Printf("button request at: %+v", a)
 			switch e.State {
 			case Idle:
+				fmt.Println("IDLE 1")
 				e.Queue[a.Floor][a.Button] = true
 				e.Dir, e.State = chooseDirection(e)
 
 				switch e.State {
 				case DoorOpen:
+					fmt.Println("DoorOpen 3")
 					elevio.SetDoorOpenLamp(true)
 					doorTimer := time.NewTimer(config.DOOR_OPEN_TIME)
 					fmt.Printf("Door timer: %+v", doorTimer)
 					clearRequestsAtFloor(e)
 				case Moving:
 					elevio.SetMotorDirection(elevio.MotorDirection(e.Dir))
+					fmt.Printf("Moving 3: set motor dir too: %+v", elevio.MotorDirection(e.Dir))
 				case Idle:
+					fmt.Println("Idle again 3")
 					break
 				}
 
 			case DoorOpen:
+				fmt.Println("DoorOpen 1")
 				if shouldClearImmediately(e, a.Floor, a.Button) {
 					time.NewTimer(config.DOOR_OPEN_TIME)
 				} else {
 					e.Queue[a.Floor][a.Button] = true
 				}
 			case Moving:
+				fmt.Println("DoorOpen 1")
 				e.Queue[a.Floor][a.Button] = true
+			default:
+				fmt.Printf("Default")
+
 			}
 
 			setAllLights(e)
@@ -201,11 +219,12 @@ func runElevatorFsm(e Elevator) {
 			// if yes: stop, clear requests at floor
 			//-> open door, start timer
 			// if no: continue moving
-			fmt.Printf("arrived at floor: %+v", a)
+			fmt.Printf("Case 1: Arrived at floor: %v", a)
 			e.Floor = a
 
 			switch e.State {
 			case Moving:
+				fmt.Printf("Case 2: Moving")
 				if shouldStop(e) {
 					elevio.SetMotorDirection(elevio.MD_Stop)
 					elevio.SetDoorOpenLamp(true)
@@ -213,24 +232,26 @@ func runElevatorFsm(e Elevator) {
 					time.NewTimer(config.DOOR_OPEN_TIME)
 					setAllLights(e)
 					e.State = DoorOpen
+					fmt.Printf("Case 3: Should stop")
 				}
-				break
 			default:
-				break
+				fmt.Printf("Case 3: Should not stop")
+				//break
 			}
 
 		// in open door state: if timer timed out and no requests -> idle else -> moving
 
 		case a := <-drv_obstr: // obstruction
+			fmt.Printf("Case 1: Obstruction")
 			fmt.Printf("%+v\n", a)
 			if a {
 				elevio.SetMotorDirection(elevio.MD_Stop)
 			} else {
-				elevio.SetMotorDirection(d)
+				break
 			}
 
-		case a := <-drv_stop: //
-			fmt.Printf("%+v\n", a)
+		case a := <-drv_stop:
+			fmt.Printf("Stopping %v\n", a)
 			for f := 0; f < config.NUM_FLOORS; f++ {
 				for b := elevio.ButtonType(0); b < config.NUM_BUTTONS; b++ {
 					elevio.SetButtonLamp(b, f, false)

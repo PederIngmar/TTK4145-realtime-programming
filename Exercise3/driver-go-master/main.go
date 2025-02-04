@@ -5,6 +5,7 @@ import (
 )
 
 func main() {
-	e := ElevatorInit()  
-	runElevatorFsm(e)
+	e := ElevatorInit()
+
+	RunElevatorFsm(e)
 }

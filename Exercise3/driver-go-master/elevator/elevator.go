@@ -28,12 +28,3 @@ type Elevator struct {
 	Dir   ElevatorDir
 	Queue [N_FLOORS][N_BUTTONS]bool
 }
-
-func ElevatorInit() Elevator {
-	return Elevator{
-		Floor: 0,
-		State: Idle,
-		Dir:   Stop,
-		Queue: [N_FLOORS][N_BUTTONS]bool{},
-	}
-}
