@@ -5,7 +5,7 @@ import (
 )
 
 func main() {
-	e := ElevatorInit()
+	e := Elevator{}
 
 	RunElevatorFsm(e)
 }

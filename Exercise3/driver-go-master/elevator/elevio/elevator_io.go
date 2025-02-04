@@ -47,6 +47,7 @@ func Init(addr string, numFloors int) {
 	if err != nil {
 		panic(err.Error())
 	}
+	fmt.Printf("Driver initialized")
 	_initialized = true
 }
 
