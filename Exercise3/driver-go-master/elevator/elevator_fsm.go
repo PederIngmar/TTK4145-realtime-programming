@@ -222,8 +222,8 @@ func EFsm() {
 					elevio.SetButtonLamp(b, f, false)
 				}
 			}
-			elevio.SetMotorDirection(elevio.MD_Stop)
-			elevio.SetDoorOpenLamp(false)
+			//elevio.SetMotorDirection(elevio.MD_Stop)
+			//elevio.SetDoorOpenLamp(false)
 		
 		case <-doorTimer.C:
 			fmt.Println("Dør-timer utløpt")
