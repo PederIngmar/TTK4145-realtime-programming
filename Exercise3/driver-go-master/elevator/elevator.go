@@ -11,6 +11,7 @@ const (
 	Idle ElevatorState = iota
 	Moving
 	DoorOpen
+	
 	// unavailable = 3
 )
 

@@ -199,6 +199,7 @@ func shouldClearImmediately(e Elevator, floor int, button elevio.ButtonType) boo
 func ElevatorInit() Elevator {
 	return Elevator{
 		Floor: elevio.GetFloor(),
+		//Floor: 0,
 		State: Idle,
 		Dir:   Stop,
 		Queue: [N_FLOORS][N_BUTTONS]bool{},
@@ -224,6 +225,39 @@ func EFsm() {
 	e := ElevatorInit()
 	//elevio.SetStopLamp(false)
 	setAllLights(e)
+	if elevio.GetFloor() == -1 {
+		elevio.SetMotorDirection(elevio.MD_Down)
+		e.Dir = Down
+		e.State = Moving
+	initLoop:
+		for {
+			select {
+			case <-drv_floors:
+				elevio.SetMotorDirection(elevio.MD_Stop)
+				elevio.SetFloorIndicator(elevio.GetFloor())
+				fmt.Println("Ankommet etasje: ", elevio.GetFloor())
+				e.State = Idle
+				e.Floor = elevio.GetFloor()
+				e.Dir, e.State = chooseDirection(e)
+				elevio.SetMotorDirection(elevio.MotorDirection(e.Dir))
+				break initLoop
+
+				// e.Floor = floor 
+				// elevio.SetFloorIndicator(e.Floor)
+				// if e.Floor == 0 {
+				// 	elevio.SetMotorDirection(elevio.MD_Stop)
+				// 	for f := 0; f < config.NUM_FLOORS; f++ {
+				// 		for btn := 0; btn < config.NUM_BUTTONS; btn++ {
+				// 			e.Queue[f][btn] = false
+				// 		}
+				// 	}
+				// 	fmt.Println("\nNullstilling ferdig")
+				// }
+			case <-time.After(5*time.Second):
+				fmt.Println("Venter på etasjesensor")
+			}
+		}
+	}
 
 	for {
 		select {
@@ -280,10 +314,25 @@ func EFsm() {
 			}
 
 		case obstr := <-drv_obstr:
-			fmt.Printf("Hindring: %v\n", obstr)
-			if obstr {
-				elevio.SetMotorDirection(elevio.MD_Stop)
+			fmt.Printf("Hindring: %v", obstr)
+			if e.State == DoorOpen {
+				if elevio.GetObstruction() {
+					//elevio.SetMotorDirection(elevio.MD_Stop)
+					elevio.SetDoorOpenLamp(true)
+					fmt.Println("Obstruksjon aktiv. Døren forblir åpen")
+				} else {
+					doorTimer.Reset(config.DOOR_OPEN_TIME)
+				}
+			} else {
+				fmt.Println("Obstruksjon registrert, men døren er lukket")
 			}
+			// if obstr {
+				
+			// } else {
+			// 	if e.State == DoorOpen {
+			// 		doorTimer.Reset(config.DOOR_OPEN_TIME)
+			// 	}
+			// }
 
 		case <-drv_stop:
 			fmt.Println("Stop-knapp trykket")
