@@ -5,7 +5,7 @@ import (
 )
 
 func main() {
-	e := elevator.Elevator{}
+	// e := elevator.Elevator{}
 
-	elevator.RunElevatorFsm(e)
+	elevator.EFsm()
 }
