@@ -10,7 +10,7 @@ import (
 // 3 states: Idle, Moving, Door open
 // events Button press, Arrive at floor, Timer timed out
 
-// 3 functions chooseDirection, shoushouldStopld_stop, clearRequestsAtFloor
+// 3 functions chooseDirection, should_stop, clearRequestsAtFloor
 
 func requestsAbove(e Elevator) bool {
 	for f := e.Floor + 1; f < N_FLOORS; f++ {
@@ -57,8 +57,8 @@ func chooseDirection(e Elevator) (ElevatorDir, ElevatorState) {
 }
 
 func shouldStop(e Elevator) bool {
-	return 	e.Queue[e.Floor][elevio.BT_HallUp] || 
-			e.Queue[e.Floor][elevio.BT_HallDown] || 
+	return 	e.Queue[e.Floor][elevio.BT_HallUp] 		|| 
+			e.Queue[e.Floor][elevio.BT_HallDown] 	|| 
 			e.Queue[e.Floor][elevio.BT_Cab]
 }
 
@@ -83,10 +83,10 @@ func shouldClearImmediately(e Elevator, floor int, button elevio.ButtonType) boo
 	case config.All:
 		return e.Floor == floor
 	case config.InDirn:
-		return e.Floor == floor && ((e.Dir == Up && button == elevio.BT_HallUp) ||
-			(e.Dir == Down && button == elevio.BT_HallDown) ||
-			e.Dir == Stop ||
-			button == elevio.BT_Cab)
+		return 	e.Floor == floor && ((e.Dir == Up && button == elevio.BT_HallUp) ||
+				(e.Dir == Down && button == elevio.BT_HallDown) ||
+				e.Dir == Stop ||
+				button == elevio.BT_Cab)
 	default:
 		return false
 	}
@@ -102,7 +102,8 @@ func ElevatorInit() Elevator {
 		Queue: [N_FLOORS][N_BUTTONS]bool{},
 	}
 }
-func EFsm() {
+
+func RunElevatorFSM() {
 	doorTimer := time.NewTimer(config.DOOR_OPEN_TIME) // New timer created with duration DOOR_OPEN_TIME
 	if !doorTimer.Stop() {
 		<-doorTimer.C
@@ -118,11 +119,11 @@ func EFsm() {
 	go elevio.PollObstructionSwitch(drv_obstr)
 	go elevio.PollStopButton(drv_stop)
 
-	elevio.Init("localhost:15657", config.NUM_FLOORS)
-	e := ElevatorInit()
+	elevio.Init("localhost:15657", config.NUM_FLOORS) 	// Initialize elevator hardware
+	e := ElevatorInit() 								// Initialize elevator struct
 	setAllLights(e)
-	if elevio.GetFloor() == -1 {
-		elevio.SetMotorDirection(elevio.MD_Down)
+	if elevio.GetFloor() == -1 { 						// If the elevator is between floors
+		elevio.SetMotorDirection(elevio.MD_Down) 		// Return the elevator to the nearest floor
 		e.Dir = Down
 		e.State = Moving
 		initLoop:

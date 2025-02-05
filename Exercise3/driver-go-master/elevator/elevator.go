@@ -24,8 +24,8 @@ const (
 )
 
 type Elevator struct {
-	Floor int
-	State ElevatorState
-	Dir   ElevatorDir
-	Queue [N_FLOORS][N_BUTTONS]bool
+	Floor 	int
+	State 	ElevatorState
+	Dir   	ElevatorDir
+	Queue 	[N_FLOORS][N_BUTTONS]bool
 }
