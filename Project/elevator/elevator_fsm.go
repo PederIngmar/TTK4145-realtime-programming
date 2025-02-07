@@ -1,8 +1,8 @@
 package elevator
 
 import (
-	"Driver-go/config"
-	"Driver-go/elevator/elevio"
+	"Project1/config"
+	"Project1/elevator/elevio"
 	"fmt"
 	"time"
 )
