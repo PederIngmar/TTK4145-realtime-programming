@@ -14,6 +14,7 @@ var _numFloors int = 4
 var _mtx sync.Mutex
 var _conn net.Conn
 
+// MotorDirection is a type that represents the 3 different motor directions: Up, Down and Stop
 type MotorDirection int
 
 const (
@@ -21,7 +22,7 @@ const (
 	MD_Down MotorDirection = -1
 	MD_Stop MotorDirection = 0
 )
-
+// ButtonType is a type that represents the 3 different types of buttons: HallUp, HallDown and Cab
 type ButtonType int
 
 const (
@@ -30,6 +31,7 @@ const (
 	BT_Cab      ButtonType = 2
 )
 
+// ButtonEvent is a struct that represents a button press event
 type ButtonEvent struct {
 	Floor  int
 	Button ButtonType
@@ -87,6 +89,7 @@ func PollButtons(receiver chan<- ButtonEvent) {
 	}
 }
 
+// PollFloorSensor polls the floor sensor and sends the current floor to the receiver channel
 func PollFloorSensor(receiver chan<- int) {
 	prev := -1
 	for {
@@ -99,6 +102,7 @@ func PollFloorSensor(receiver chan<- int) {
 	}
 }
 
+// PollStopButton polls the stop button and sends the current state to the receiver channel
 func PollStopButton(receiver chan<- bool) {
 	prev := false
 	for {
@@ -111,6 +115,7 @@ func PollStopButton(receiver chan<- bool) {
 	}
 }
 
+// PollObstructionSwitch polls the obstruction switch and sends the current state to the receiver channel
 func PollObstructionSwitch(receiver chan<- bool) {
 	prev := false
 	for {
@@ -123,11 +128,13 @@ func PollObstructionSwitch(receiver chan<- bool) {
 	}
 }
 
+// GetButton returns true if the button is pressed at the given floor
 func GetButton(button ButtonType, floor int) bool {
 	a := read([4]byte{6, byte(button), byte(floor), 0})
 	return toBool(a[1])
 }
 
+// GetFloor returns the last floor the elevator passed
 func GetFloor() int {
 	a := read([4]byte{7, 0, 0, 0})
 	if a[1] != 0 {
@@ -137,15 +144,18 @@ func GetFloor() int {
 	}
 }
 
+// GetStop returns true if the stop button is pressed
 func GetStop() bool {
 	a := read([4]byte{8, 0, 0, 0})
 	return toBool(a[1])
 }
 
+// GetObstruction returns true if the obstruction switch is active
 func GetObstruction() bool {
 	a := read([4]byte{9, 0, 0, 0})
 	return toBool(a[1])
 }
+
 
 func read(in [4]byte) [4]byte {
 	_mtx.Lock()

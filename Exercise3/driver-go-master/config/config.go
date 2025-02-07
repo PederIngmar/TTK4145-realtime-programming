@@ -16,4 +16,5 @@ const (
 	NUM_BUTTONS           = 3
 	CLEAR_REQUEST_VARIANT = InDirn
 	DOOR_OPEN_TIME        = 3 * time.Second
+	TRAVEL_TIME      = 2
 )

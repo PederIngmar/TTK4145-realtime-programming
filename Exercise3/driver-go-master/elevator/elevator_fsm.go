@@ -12,6 +12,7 @@ import (
 
 // 3 functions chooseDirection, should_stop, clearRequestsAtFloor
 
+// Returns true if there are requests above the elevator's current floor
 func requestsAbove(e Elevator) bool {
 	for f := e.Floor + 1; f < N_FLOORS; f++ {
 		for btn := 0; btn < N_BUTTONS; btn++ {
@@ -23,6 +24,7 @@ func requestsAbove(e Elevator) bool {
 	return false
 }
 
+// Returns true if there are requests below the elevator's current floor
 func requestsBelow(e Elevator) bool {
 	for f := 0; f < e.Floor; f++ {
 		for btn := 0; btn < N_BUTTONS; btn++ {
@@ -34,6 +36,7 @@ func requestsBelow(e Elevator) bool {
 	return false
 }
 
+// Returns true if there are requests at the elevator's current floor
 func requestsHere(e Elevator) bool {
 	for btn := 0; btn < N_BUTTONS; btn++ {
 		if e.Queue[e.Floor][btn] {
@@ -43,6 +46,8 @@ func requestsHere(e Elevator) bool {
 	return false
 }
 
+
+// Chooses the direction the elevator should move in, and the state it should be in
 func chooseDirection(e Elevator) (ElevatorDir, ElevatorState) {
 	switch {
 	case requestsAbove(e):
@@ -56,19 +61,21 @@ func chooseDirection(e Elevator) (ElevatorDir, ElevatorState) {
 	}
 }
 
+// Returns true if the elevator should stop at the current floor
 func shouldStop(e Elevator) bool {
 	return 	e.Queue[e.Floor][elevio.BT_HallUp] 		|| 
 			e.Queue[e.Floor][elevio.BT_HallDown] 	|| 
 			e.Queue[e.Floor][elevio.BT_Cab]
 }
 
-
+// Clears all requests at the elevator's current floor
 func clearRequestsAtFloor(e *Elevator) {
 	for btn := 0; btn < N_BUTTONS; btn++ {
 		e.Queue[e.Floor][btn] = false
 	}
 }
 
+// Sets all lights in the elevator to match the elevator's queue
 func setAllLights(e Elevator) {
 	for floor := 0; floor < N_FLOORS; floor++ {
 		for btn := 0; btn < N_BUTTONS; btn++ {
@@ -78,6 +85,7 @@ func setAllLights(e Elevator) {
 
 }
 
+// Returns true if the elevator should clear requests immediately when arriving at a floor
 func shouldClearImmediately(e Elevator, floor int, button elevio.ButtonType) bool {
 	switch config.CLEAR_REQUEST_VARIANT {
 	case config.All:
@@ -92,7 +100,7 @@ func shouldClearImmediately(e Elevator, floor int, button elevio.ButtonType) boo
 	}
 }
 
-
+// Initializes the elevator 
 func ElevatorInit() Elevator {
 	return Elevator{
 		Floor: elevio.GetFloor(),
@@ -248,4 +256,63 @@ func RunElevatorFSM() {
 		}
 	}
 }
+
+func requests_clearAtCurrentFloor(e_old Elevator, onCleared func(elevio.ButtonType, int)) Elevator {
+	e := e_old
+	for btn := elevio.ButtonType(0); btn < N_BUTTONS; btn++ {
+		if e.Queue[e.Floor][btn] {
+			e.Queue[e.Floor][btn] = false
+			if onCleared != nil {          
+                onCleared(btn, e.Floor)
+            }
+		}
+	}
+	return e
+}
+
+// Returns the time it takes for the elevator to reach the floor of the button press
+func TimeToServeRequest(e_copy Elevator, btnPress elevio.ButtonEvent) time.Duration {
+	duration := 0 * time.Second
+
+	elevatorArrival := 0 
+	
+	e := e_copy
+	e.Queue[btnPress.Floor][btnPress.Button] = true // Add the button press to the queue
+	
+	// Function to be called when a request is cleared
+	// Sets elevatorArrival to 1 if the button press is cleared
+	onCleared := func(btn elevio.ButtonType, floor int) {
+		if btn == btnPress.Button && floor == btnPress.Floor {
+			elevatorArrival = 1
+		}
+	}
+	switch e.State {
+	case Idle:
+		e.Dir, e.State = chooseDirection(e)
+		if e.Dir == Stop {
+			return duration // Elevator is already at the floor
+		}
+	case Moving:
+		duration += config.TRAVEL_TIME/2 
+		e.Floor += int(e.Dir) 
+	case DoorOpen:
+		duration -= config.DOOR_OPEN_TIME/2
+		if !requestsAbove(e) && !requestsBelow(e) {
+			return duration
+		}
+	}
+	for {
+		if shouldStop(e) {
+			e = requests_clearAtCurrentFloor(e, onCleared)
+			if elevatorArrival == 1 {
+				return duration
+			}
+			duration += config.DOOR_OPEN_TIME
+			e.Dir, _ = chooseDirection(e)
+		}
+		e.Floor += int(e.Dir)
+		duration += config.TRAVEL_TIME
+	}
+}
+
 

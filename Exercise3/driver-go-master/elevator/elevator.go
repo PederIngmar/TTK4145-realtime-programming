@@ -4,7 +4,7 @@ const (
 	N_FLOORS  = 4
 	N_BUTTONS = 3
 )
-
+// Elevator states: Idle, Moving, Door open
 type ElevatorState int
 
 const (
@@ -14,7 +14,7 @@ const (
 	
 	// unavailable = 3
 )
-
+// Elevator directions: Down, Stop, Up
 type ElevatorDir int
 
 const (
@@ -27,5 +27,5 @@ type Elevator struct {
 	Floor 	int
 	State 	ElevatorState
 	Dir   	ElevatorDir
-	Queue 	[N_FLOORS][N_BUTTONS]bool
+	Queue 	[N_FLOORS][N_BUTTONS]bool // 
 }
