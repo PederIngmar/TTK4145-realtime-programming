@@ -53,7 +53,7 @@ func primaryLoop(startCount int) {
 	// Spawn backup-prosess ved oppstart
 	spawnBackup()
 
-	fmt.Println("[PRIMARY] Starter opp-telling fra", count)
+	fmt.Println("[PRIMARY] Starter opptelling fra", count)
 	for {
 		fmt.Println(count)
 		msg := fmt.Sprintf("ALIVE:%d", count)
@@ -82,7 +82,7 @@ func backupLoop() {
 	}
 	defer conn.Close()
 
-	fmt.Println("[BACKUP] Starter backup-modus. Venter på alive-meldinger fra primær... 👀")
+	fmt.Println("[BACKUP] Starter backup-modus. Venter på alive-meldinger fra primær..")
 	lastTime := time.Now()
 
 	buf := make([]byte, 1024)
@@ -126,10 +126,10 @@ func backupLoop() {
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "backup" {
-		fmt.Println("[SYSTEM] Starter i BACKUP-modus. 👀")
+		fmt.Println("[SYSTEM] Starter i BACKUP-modus.")
 		backupLoop()
 	} else {
-		fmt.Println("[SYSTEM] Starter i PRIMARY-modus. 🚀")
+		fmt.Println("[SYSTEM] Starter i PRIMARY-modus.")
 		primaryLoop(1)
 	}
 }
