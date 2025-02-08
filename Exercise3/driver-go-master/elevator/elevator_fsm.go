@@ -46,32 +46,118 @@ func requestsHere(e Elevator) bool {
 	return false
 }
 
-
 // Chooses the direction the elevator should move in, and the state it should be in
+// func chooseDirection(e Elevator) (ElevatorDir, ElevatorState) {
+// 	switch {
+// 	case requestsAbove(e):
+// 		return Up, Moving
+// 	case requestsHere(e):
+// 		return Stop, DoorOpen
+// 	case requestsBelow(e):
+// 		return Down, Moving
+// 	default:
+// 		return Stop, Idle
+// 	}
+// }
+
 func chooseDirection(e Elevator) (ElevatorDir, ElevatorState) {
-	switch {
-	case requestsAbove(e):
-		return Up, Moving
-	case requestsHere(e):
-		return Stop, DoorOpen
-	case requestsBelow(e):
-		return Down, Moving
+	switch e.Dir {
+	case Up:
+		if requestsAbove(e) {
+			return Up, Moving
+		} else if requestsHere(e) {
+			return Down, DoorOpen
+		} else if requestsBelow(e) {
+			return Down, Moving
+		} else {
+			return Stop, Idle
+		}
+	case Down:
+		if requestsBelow(e) {
+			return Down, Moving
+		} else if requestsHere(e) {
+			return Up, DoorOpen
+		} else if requestsAbove(e) {
+			return Up, Moving
+		} else {
+			return Stop, Idle
+		}
+	case Stop:
+		if requestsHere(e) {
+			return Stop, DoorOpen
+		} else if requestsAbove(e) {
+			return Up, Moving
+		} else if requestsBelow(e) {
+			return Down, Moving
+		} else {
+			return Stop, Idle
+		}
 	default:
 		return Stop, Idle
 	}
+
 }
 
 // Returns true if the elevator should stop at the current floor
+//
+//	func shouldStop(e Elevator) bool {
+//		return e.Queue[e.Floor][elevio.BT_HallUp] ||
+//			e.Queue[e.Floor][elevio.BT_HallDown] ||
+//			e.Queue[e.Floor][elevio.BT_Cab]
+//	}
+
+
+// Må se mer på en bedre løsning for denne
 func shouldStop(e Elevator) bool {
-	return 	e.Queue[e.Floor][elevio.BT_HallUp] 		|| 
-			e.Queue[e.Floor][elevio.BT_HallDown] 	|| 
+	switch config.CLEAR_REQUEST_VARIANT {
+	case config.All:
+		return e.Queue[e.Floor][elevio.BT_HallUp] ||
+			e.Queue[e.Floor][elevio.BT_HallDown] ||
 			e.Queue[e.Floor][elevio.BT_Cab]
+	case config.InDir:
+		switch e.Dir {
+		case Down:
+			return e.Queue[e.Floor][elevio.BT_HallDown] || e.Queue[e.Floor][elevio.BT_Cab] || !requestsBelow(e)
+		case Up:
+			return e.Queue[e.Floor][elevio.BT_HallUp] || e.Queue[e.Floor][elevio.BT_Cab] || !requestsAbove(e)
+		case Stop:
+			return true
+		default:
+			return true
+		}
+	default:
+	}
+	return false
+
 }
 
 // Clears all requests at the elevator's current floor
 func clearRequestsAtFloor(e *Elevator) {
-	for btn := 0; btn < N_BUTTONS; btn++ {
-		e.Queue[e.Floor][btn] = false
+	switch config.CLEAR_REQUEST_VARIANT {
+	case config.All:
+		for btn := 0; btn < N_BUTTONS; btn++ {
+			e.Queue[e.Floor][btn] = false
+		}
+
+	case config.InDir:
+		e.Queue[e.Floor][elevio.BT_Cab] = false
+		switch e.Dir {
+		case Up:
+			if !requestsAbove(*e) && !e.Queue[e.Floor][elevio.BT_HallUp] {
+				e.Queue[e.Floor][elevio.BT_HallDown] = false
+			}
+			e.Queue[e.Floor][elevio.BT_HallUp] = false
+		case Down:
+			if !requestsBelow(*e) && !e.Queue[e.Floor][elevio.BT_HallDown] {
+				e.Queue[e.Floor][elevio.BT_HallUp] = false
+			}
+			e.Queue[e.Floor][elevio.BT_HallDown] = false
+		case Stop:
+			e.Queue[e.Floor][elevio.BT_HallUp] = false
+			e.Queue[e.Floor][elevio.BT_HallDown] = false
+		default:
+		}
+	default:
 	}
 }
 
@@ -87,20 +173,22 @@ func setAllLights(e Elevator) {
 
 // Returns true if the elevator should clear requests immediately when arriving at a floor
 func shouldClearImmediately(e Elevator, floor int, button elevio.ButtonType) bool {
+	fmt.Println("Should clear immediately?")
 	switch config.CLEAR_REQUEST_VARIANT {
 	case config.All:
 		return e.Floor == floor
-	case config.InDirn:
-		return 	e.Floor == floor && ((e.Dir == Up && button == elevio.BT_HallUp) ||
-				(e.Dir == Down && button == elevio.BT_HallDown) ||
-				e.Dir == Stop ||
-				button == elevio.BT_Cab)
+	case config.InDir:
+		fmt.Println("CLEARING INDIR")
+		return e.Floor == floor && ((e.Dir == Up && button == elevio.BT_HallUp) ||
+			(e.Dir == Down && button == elevio.BT_HallDown) ||
+			e.Dir == Stop ||
+			button == elevio.BT_Cab)
 	default:
 		return false
 	}
 }
 
-// Initializes the elevator 
+// Initializes the elevator
 func ElevatorInit() Elevator {
 	return Elevator{
 		Floor: elevio.GetFloor(),
@@ -127,47 +215,47 @@ func RunElevatorFSM() {
 	go elevio.PollObstructionSwitch(drv_obstr)
 	go elevio.PollStopButton(drv_stop)
 
-	elevio.Init("localhost:15657", config.NUM_FLOORS) 	// Initialize elevator hardware
-	e := ElevatorInit() 								// Initialize elevator struct
+	elevio.Init("localhost:15657", config.NUM_FLOORS) // Initialize elevator hardware
+	e := ElevatorInit()                               // Initialize elevator struct
 	setAllLights(e)
-	if elevio.GetFloor() == -1 { 						// If the elevator is between floors
-		elevio.SetMotorDirection(elevio.MD_Down) 		// Return the elevator to the nearest floor
+	if elevio.GetFloor() == -1 { // If the elevator is between floors
+		elevio.SetMotorDirection(elevio.MD_Down) // Return the elevator to the nearest floor
 		e.Dir = Down
 		e.State = Moving
-		initLoop:
-			for {
-				select {
-				case <-drv_floors:
-					elevio.SetMotorDirection(elevio.MD_Stop)
-					e.Floor = elevio.GetFloor()
-					elevio.SetFloorIndicator(e.Floor)
-					fmt.Println("Ankommet etasje: ", e.Floor)
-					e.State = Idle
-					e.Dir, e.State = chooseDirection(e)
-					elevio.SetMotorDirection(elevio.MotorDirection(e.Dir))
-					break initLoop
+	initLoop:
+		for {
+			select {
+			case <-drv_floors:
+				elevio.SetMotorDirection(elevio.MD_Stop)
+				e.Floor = elevio.GetFloor()
+				elevio.SetFloorIndicator(e.Floor)
+				fmt.Println("Ankommet etasje: ", e.Floor)
+				e.State = Idle
+				e.Dir, e.State = chooseDirection(e)
+				elevio.SetMotorDirection(elevio.MotorDirection(e.Dir))
+				break initLoop
 
-				case <-time.After(5*time.Second):
-					fmt.Println("Venter på etasjesensor")
-				}
+			case <-time.After(5 * time.Second):
+				fmt.Println("Venter på etasjesensor")
 			}
 		}
+	}
 
 	for {
 		select {
-		// Knappetrykk	
+		// Knappetrykk
 		case btnPress := <-drv_buttons:
 			fmt.Printf("\nKnappetrykk: %+v\n", btnPress)
 			//e.Queue[btnPress.Floor][btnPress.Button] = true
 			//setAllLights(e)
-			switch e.State { 
+			switch e.State {
 
 			case Idle:
 				// Legger forespørselen til i køen og velger ny retning
 				e.Queue[btnPress.Floor][btnPress.Button] = true
 				e.Dir, e.State = chooseDirection(e) // Velger ny retning
 
-				switch e.State { 
+				switch e.State {
 
 				case DoorOpen:
 					elevio.SetDoorOpenLamp(true)
@@ -181,6 +269,7 @@ func RunElevatorFSM() {
 				}
 
 			case DoorOpen:
+				fmt.Println("Button press while door is open")
 				if shouldClearImmediately(e, btnPress.Floor, btnPress.Button) {
 					doorTimer.Reset(config.DOOR_OPEN_TIME)
 				} else {
@@ -219,10 +308,10 @@ func RunElevatorFSM() {
 						fmt.Println("Obstruksjon fjernet")
 						doorTimer.Reset(config.DOOR_OPEN_TIME)
 					}
-			} else {
-				fmt.Println("Obstruksjon registrert, men døren er lukket")
+				} else {
+					fmt.Println("Obstruksjon registrert, men døren er lukket")
+				}
 			}
-		}
 		// Stopp-knapp
 		case <-drv_stop:
 			fmt.Println("Stopp-knapp trykket")
@@ -233,25 +322,27 @@ func RunElevatorFSM() {
 			}
 			//elevio.SetMotorDirection(elevio.MD_Stop)
 			//elevio.SetDoorOpenLamp(false)
-		
+
 		case <-doorTimer.C:
 			fmt.Println("Dør-timer utløpt")
 			if e.State == DoorOpen {
 				newDir, newState := chooseDirection(e)
 				e.Dir, e.State = newDir, newState
 				switch e.State {
-					case DoorOpen:
-						elevio.SetDoorOpenLamp(true)
-						clearRequestsAtFloor(&e)
-						setAllLights(e)
-						doorTimer.Reset(config.DOOR_OPEN_TIME)
-					case Moving:
-						elevio.SetDoorOpenLamp(false)
-						elevio.SetMotorDirection(elevio.MotorDirection(e.Dir))
-					case Idle:
-						elevio.SetDoorOpenLamp(false)
-						elevio.SetMotorDirection(elevio.MD_Stop)
+				case DoorOpen:
+					elevio.SetDoorOpenLamp(true)
+					clearRequestsAtFloor(&e)
+					setAllLights(e)
+					doorTimer.Reset(config.DOOR_OPEN_TIME)
+				case Moving:
+					elevio.SetDoorOpenLamp(false)
+					elevio.SetMotorDirection(elevio.MotorDirection(e.Dir))
+				case Idle:
+					elevio.SetDoorOpenLamp(false)
+					elevio.SetMotorDirection(elevio.MD_Stop)
 				}
+			} else {
+				fmt.Printf("Door timer, heis state: %v", e.State)
 			}
 		}
 	}
@@ -262,9 +353,9 @@ func requests_clearAtCurrentFloor(e_old Elevator, onCleared func(elevio.ButtonTy
 	for btn := elevio.ButtonType(0); btn < N_BUTTONS; btn++ {
 		if e.Queue[e.Floor][btn] {
 			e.Queue[e.Floor][btn] = false
-			if onCleared != nil {          
-                onCleared(btn, e.Floor)
-            }
+			if onCleared != nil {
+				onCleared(btn, e.Floor)
+			}
 		}
 	}
 	return e
@@ -274,11 +365,11 @@ func requests_clearAtCurrentFloor(e_old Elevator, onCleared func(elevio.ButtonTy
 func TimeToServeRequest(e_copy Elevator, btnPress elevio.ButtonEvent) time.Duration {
 	duration := 0 * time.Second
 
-	elevatorArrival := 0 
-	
+	elevatorArrival := 0
+
 	e := e_copy
 	e.Queue[btnPress.Floor][btnPress.Button] = true // Add the button press to the queue
-	
+
 	// Function to be called when a request is cleared
 	// Sets elevatorArrival to 1 if the button press is cleared
 	onCleared := func(btn elevio.ButtonType, floor int) {
@@ -293,10 +384,10 @@ func TimeToServeRequest(e_copy Elevator, btnPress elevio.ButtonEvent) time.Durat
 			return duration // Elevator is already at the floor
 		}
 	case Moving:
-		duration += config.TRAVEL_TIME/2 
-		e.Floor += int(e.Dir) 
+		duration += config.TRAVEL_TIME / 2
+		e.Floor += int(e.Dir)
 	case DoorOpen:
-		duration -= config.DOOR_OPEN_TIME/2
+		duration -= config.DOOR_OPEN_TIME / 2
 		if !requestsAbove(e) && !requestsBelow(e) {
 			return duration
 		}
@@ -314,5 +405,3 @@ func TimeToServeRequest(e_copy Elevator, btnPress elevio.ButtonEvent) time.Durat
 		duration += config.TRAVEL_TIME
 	}
 }
-
-

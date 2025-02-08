@@ -209,7 +209,7 @@ A single step looks something like this:
 
 ----
 
-There is one major quirky issue though, involving the direction of the requests. Say we have one elevator at floor 0, one at floor 3, and two hall requests Down-1 and Up-2. The elevator at the bottom moves up to floor 1, the elevator at the top moves down to floor 2. In turn, they both see that there are requests further along in the direction of travel (as per the Should Stop function), and neither take the requests, but instead keep moving. Thus, the elevator at the top moved down to floor 1, and the elevator at the bottom moved up to floor 2, and have moved right past each other!
+There is one major quirky issue though, involving the direction of the requests. Say we have one elevator at floor 1, one at floor 4, and two hall requests Down-2 and Up-3. The elevator at the bottom moves up to floor 2, the elevator at the top moves down to floor 3. In turn, they both see that there are requests further along in the direction of travel (as per the Should Stop function), and neither take the requests, but instead keep moving. Thus, the elevator at the top moved down to floor 2, and the elevator at the bottom moved up to floor 3, and have moved right past each other!
 
 Which means we need a special case this situation, that can be expressed as "all the unassigned hall requests are at floors where there already is an elevator, and none of these elevators have any remaining cab requests". If this situation is true, we can take a shortcut in the main loop, and immediately assign all the remaining hall requests.
 
