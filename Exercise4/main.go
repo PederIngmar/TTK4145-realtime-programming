@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"net"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"strconv"
@@ -11,125 +11,118 @@ import (
 )
 
 const (
-	UDP_IP           = "127.0.0.1"
-	UDP_PORT         = 5005
-	ALIVE_INTERVAL   = 1 * time.Second   // Hvor ofte alive-meldinger sendes
-	TIMEOUT_THRESHOLD = 3 * time.Second  // Hvor lenge backup venter før den promoterer seg selv
+	heartbeatFile     = "/tmp/pp_heartbeat.txt" // Filen som brukes for "heartbeat"
+	heartbeatInterval = 1 * time.Second         // Primæren oppdaterer heartbeat hvert sekund
+	timeoutDuration   = 2500 * time.Millisecond // Backup venter 2.5 sekunder før den antar at primæren er død
+	backupCheckDelay  = 500 * time.Millisecond  // Backup sjekker heartbeat hvert 500ms
 )
 
-// spawnBackup starter en ny backup-prosess i et eget gnome-terminal-vindu
+// spawnBackup spawner en backup-instans i et nytt terminalvindu ved hjelp av gnome-terminal
 func spawnBackup() {
+	fmt.Println("Spawner backup... 🚀")
 	exePath, err := os.Executable()
 	if err != nil {
-		fmt.Println("[PRIMARY] Feil ved henting av eksekverbar sti:", err)
+		fmt.Println("Feil ved å hente kjørbar bane:", err)
 		return
 	}
 
-	// Bygg kommandoen: gnome-terminal -- <eksekverbar sti> backup
-	cmd := exec.Command("gnome-terminal", "--", exePath, "backup")
+	// Start backup: Kjør det samme programmet med argumentet "--backup"
+	cmd := exec.Command("gnome-terminal", "--", exePath, "--backup")
 	if err := cmd.Start(); err != nil {
-		fmt.Println("[PRIMARY] Feil ved spawning av backup:", err)
-	} else {
-		fmt.Println("[PRIMARY] Spawnet backup-prosess.")
+		fmt.Println("Feil ved spawning av backup:", err)
 	}
 }
 
-// primaryLoop er den primære prosessen som teller og sender alive-meldinger via UDP
-func primaryLoop(startCount int) {
-	count := startCount
-
-	// Opprett en UDP-tilkobling for sending
-	addr := net.UDPAddr{
-		IP:   net.ParseIP(UDP_IP),
-		Port: UDP_PORT,
-	}
-	conn, err := net.DialUDP("udp", nil, &addr)
+// writeHeartbeat skriver ut den nåværende telleverdien og tidsstempelet til heartbeat-filen.
+func writeHeartbeat(counter int) {
+	// Format: "counter timestamp"
+	content := fmt.Sprintf("%d %f\n", counter, float64(time.Now().UnixNano())/1e9)
+	err := ioutil.WriteFile(heartbeatFile, []byte(content), 0644)
 	if err != nil {
-		fmt.Println("[PRIMARY] Feil ved oppretting av UDP-forbindelse:", err)
-		return
-	}
-	defer conn.Close()
-
-	// Spawn backup-prosess ved oppstart
-	spawnBackup()
-
-	fmt.Println("[PRIMARY] Starter opptelling fra", count)
-	for {
-		fmt.Println(count)
-		msg := fmt.Sprintf("ALIVE:%d", count)
-		_, err := conn.Write([]byte(msg))
-		if err != nil {
-			fmt.Println("[PRIMARY] Feil ved sending av heartbeat:", err)
-		}
-		count++
-		time.Sleep(ALIVE_INTERVAL)
+		fmt.Println("Feil ved skriving av heartbeat:", err)
 	}
 }
 
-// backupLoop lytter etter alive-meldinger og promoterer seg hvis primæren stopper å sende
-func backupLoop() {
-	lastCount := 0
-
-	// Lytt på UDP-porten for alive-meldinger
-	addr := net.UDPAddr{
-		IP:   net.ParseIP(UDP_IP),
-		Port: UDP_PORT,
-	}
-	conn, err := net.ListenUDP("udp", &addr)
+// readHeartbeat leser heartbeat-filen og returnerer (counter, timestamp)
+func readHeartbeat() (int, time.Time, error) {
+	data, err := ioutil.ReadFile(heartbeatFile)
 	if err != nil {
-		fmt.Println("[BACKUP] Feil ved binding til UDP-port:", err)
-		os.Exit(1)
+		return 0, time.Time{}, err
 	}
-	defer conn.Close()
+	parts := strings.Fields(string(data))
+	if len(parts) < 2 {
+		return 0, time.Time{}, fmt.Errorf("ugyldig format i heartbeat-filen")
+	}
 
-	fmt.Println("[BACKUP] Starter backup-modus. Venter på alive-meldinger fra primær..")
-	lastTime := time.Now()
+	counter, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, time.Time{}, err
+	}
 
-	buf := make([]byte, 1024)
+	tsFloat, err := strconv.ParseFloat(parts[1], 64)
+	if err != nil {
+		return 0, time.Time{}, err
+	}
+	sec := int64(tsFloat)
+	nsec := int64((tsFloat - float64(sec)) * 1e9)
+	ts := time.Unix(sec, nsec)
+	return counter, ts, nil
+}
+
+// primaryMode er hovedløkken til primæren: Teller opp, skriver heartbeat og spawner backup én gang.
+func primaryMode(startCounter int) {
+	fmt.Printf("Jeg er PRIMARY 🚀 – starter telling fra %d\n", startCounter)
+	backupSpawned := false
+	counter := startCounter
+
 	for {
-		// Sett en read deadline for å sjekke for timeout
-		conn.SetReadDeadline(time.Now().Add(ALIVE_INTERVAL))
-		n, _, err := conn.ReadFromUDP(buf)
-		if err != nil {
-			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				// Sjekk om timeout har overskredet terskelen
-				if time.Since(lastTime) > TIMEOUT_THRESHOLD {
-					fmt.Printf("[BACKUP] Ingen heartbeat mottatt på over %.0f sekunder.\n", TIMEOUT_THRESHOLD.Seconds())
-					fmt.Printf("[BACKUP] Promoterer backup til primær med start-teller %d.\n", lastCount+1)
-					conn.Close() // Lukk socketen slik at ny backup kan binde seg til porten
-					primaryLoop(lastCount + 1)
-					return
-				}
-				// Timeout, men ikke lenge nok til å promotere – fortsett lyttingen
-				continue
-			} else {
-				fmt.Println("[BACKUP] Uventet feil under lesing:", err)
-				continue
-			}
+		if !backupSpawned {
+			spawnBackup()
+			backupSpawned = true
 		}
 
-		// Melding mottatt
-		msg := string(buf[:n])
-		if strings.HasPrefix(msg, "ALIVE:") {
-			parts := strings.Split(msg, ":")
-			if len(parts) == 2 {
-				num, err := strconv.Atoi(parts[1])
-				if err == nil {
-					lastCount = num
-					lastTime = time.Now()
-					// Debug: fmt.Printf("[BACKUP] Mottok heartbeat: %d\n", num)
-				}
-			}
+		writeHeartbeat(counter)
+		fmt.Println(counter)
+		counter++
+		time.Sleep(heartbeatInterval)
+	}
+}
+
+// backupMode sjekker heartbeat-filen, og hvis den ikke oppdateres innen timeout, tar den over som primær.
+func backupMode() {
+	fmt.Println("Jeg er BACKUP 🛡️ – sjekker om primæren er i live...")
+	for {
+		// Hvis heartbeat-filen ikke finnes, vent litt og prøv igjen.
+		if _, err := os.Stat(heartbeatFile); os.IsNotExist(err) {
+			time.Sleep(backupCheckDelay)
+			continue
 		}
+
+		counter, ts, err := readHeartbeat()
+		if err != nil {
+			fmt.Println("Feil ved lesing av heartbeat:", err)
+			time.Sleep(backupCheckDelay)
+			continue
+		}
+
+		// Hvis for mye tid har gått siden siste heartbeat, tar backupen over.
+		if time.Since(ts) > timeoutDuration {
+			fmt.Println("Ingen heartbeat på en stund! Tar over som PRIMARY 🔥")
+			newStart := counter + 1
+			// Spawn en ny backup før vi tar over
+			spawnBackup()
+			primaryMode(newStart)
+			return
+		}
+		time.Sleep(backupCheckDelay)
 	}
 }
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "backup" {
-		fmt.Println("[SYSTEM] Starter i BACKUP-modus.")
-		backupLoop()
+	// Sjekk om programmet kjører i backup-modus
+	if len(os.Args) > 1 && os.Args[1] == "--backup" {
+		backupMode()
 	} else {
-		fmt.Println("[SYSTEM] Starter i PRIMARY-modus.")
-		primaryLoop(1)
+		primaryMode(1)
 	}
 }
