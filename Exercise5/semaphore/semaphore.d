@@ -33,33 +33,33 @@ class Resource(T) {
     }
     
     T allocate(int priority){
-        wait(mtx);
+        mtx.wait();
         if(busy){
             numWaiting[priority]++; /*litt usikker på denne*/
-            notify(mtx);
-            wait(sems[priority]);
+            mtx.notify();
+            sems[priority].wait();
             numWaiting[priority]--; /*litt usikker på denne*/
         }
         busy = true;
-        notify(mtx);
+        mtx.notify();
         return value;
 
     }
     
     void deallocate(T v){
         
-        wait(mtx);
+        mtx.wait();
         value = v;
         busy = false;
 
         if(numWaiting[1] > 0){
-            notify(sems[1]);
+            sems[1].notify();
         }
         else if(numWaiting[0] > 0){
-            notify(sems[0]);
+            sems[0].notify();
         }
         else {
-            notify(mtx);
+            mtx.notify();
         }
     }
 }
