@@ -40,25 +40,25 @@ class Resource(T) {
     }
     
     T allocate(int id, int priority){
-        lock(mtx);
+        mtx.lock();
         queue.push(id, priority);
         while(queue.front() != id){
 
-            wait(cond);
+            cond.wait();
         }
-        unlock(mtx);
+        mtx.unlock();
 
         return value;
     }
     
     void deallocate(T v){
-        lock(mtx);
+        mtx.lock();
         value = v;
         queue.popFront();
         if(!queue.empty){
-            notifyAll(cond);
+            cond.notifyAll();
         }
-        unlock(mtx);
+        mtx.unlock();
     }
 }
 
