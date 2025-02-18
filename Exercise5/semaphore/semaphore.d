@@ -47,8 +47,9 @@ class Resource(T) {
     }
     
     void deallocate(T v){
-        /*value = v;*/
+        
         wait(mtx);
+        value = v;
         busy = false;
 
         if(numWaiting[1] > 0){
