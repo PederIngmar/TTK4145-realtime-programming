@@ -1,4 +1,3 @@
-
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Containers; use Ada.Containers;
 with Ada.Containers.Vectors;
@@ -13,42 +12,40 @@ procedure protectobj is
     use IntVec;
     package Integer_IO is new Ada.Text_IO.Integer_IO (Integer);
 
-    -- --- RESOURCE OBJECT --- --
-    -- You will finish implementing allocateLow, allocateHigh, and deallocate.
-    -- Note: There are no checks that the final execution order is correct. You will have to check this yourself.
-    -- Hints:
-    --  - Use `entryName'Count` to get the number of tasks waiting on an entry. This can be used in the guard of another entry.
-    --  - Equality checks are done with `=`, instead of `==`. Assignment is always done with `:=`.
-    -----------------------
-    protected type Resource is
-        entry allocateHigh(val: out IntVec.Vector);
-        entry allocateLow(val: out IntVec.Vector);
-        procedure deallocate(val: IntVec.Vector);
-    private
-        value: IntVec.Vector;
-        busy: Boolean := False;
-    end Resource;
-    protected body Resource is
-    
-        entry allocateLow(val: out IntVec.Vector) when True is
-        begin
-            --Put_Line("allocateLow");
-            val := value;
-        end allocateLow;
-    
-        entry allocateHigh(val: out IntVec.Vector) when True is
-        begin
-            --Put_Line("allocateHigh");
-            val := value;
-        end allocateHigh;
+   protected type Resource is
+      entry allocateHigh(val: out IntVec.Vector);
+      entry allocateLow(val: out IntVec.Vector);
+      procedure deallocate(val: IntVec.Vector);
 
-        procedure deallocate(val: IntVec.Vector) is
-        begin
-            --Put_Line("deallocate");
-            value := val;
-        end deallocate;
+   private
+      value: IntVec.Vector;
+      busy: Boolean := False;
+   end Resource;
 
-    end Resource;
+   protected body Resource is
+
+      entry allocateHigh(val: out IntVec.Vector) when not busy is
+      begin
+         busy := True;
+         val := value;
+      end allocateHigh;
+
+      entry allocateLow(val: out IntVec.Vector)
+         when (not busy) and (allocateHigh'Count = 0) is
+      begin
+         busy := True;
+         val := value;
+      end allocateLow;
+
+      procedure deallocate(val: IntVec.Vector) is
+      begin
+         value := val;
+         busy := False;
+      end deallocate;
+
+   end Resource;
+
+
 
 
 
